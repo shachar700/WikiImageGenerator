@@ -58,7 +58,6 @@ class SPLT_PT_Panel_2_2(bpy.types.Panel):
         layout.operator("object.fix_faces", icon = "MODIFIER_DATA")
 
 class SPLT_PT_Panel_3(bpy.types.Panel):
-    # bl_idname = "splatoonpanel"
     bl_label = "Camera"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -66,16 +65,26 @@ class SPLT_PT_Panel_3(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.operator("object.position_camera", icon = "OUTLINER_OB_CAMERA")
+        layout.operator("object.position_camera", icon="OUTLINER_OB_CAMERA")
+
         box1 = layout.box()
-        box1.label(text="Model rotation")
-        box1.prop(context.window_manager, "x_rotations", text="Rotations by lap")
-        layout.operator("object.check_rotation", icon = "ORIENTATION_GIMBAL")
+        box1.label(text="File resolution")
+        row1 = box1.row()
+        row1.prop(context.window_manager, "x_resolution")
+        row1.prop(context.window_manager, "y_resolution")
+
         box2 = layout.box()
-        box2.label(text="File resolution")
-        row2 = box2.row()
-        row2.prop(context.window_manager, "x_resolution")
-        row2.prop(context.window_manager, "y_resolution")
+        box2.label(text="Model rotation")
+        box2.prop(context.window_manager, "x_rotations", text="Rotations by lap")
+        
+        # Check Object Rotation button
+        box3 = layout.box()
+        box3.label(text="Checker")
+        op = box3.operator("object.check_rotation", icon="ORIENTATION_GIMBAL")
+        box3.enabled = not context.window_manager.get("is_rotating", False)
+        box3.prop(context.window_manager, "rotation_speed")
+        box3.prop(context.window_manager, "loop_rotation")
+        box3.label(text="Press ESC or right-click to stop \"Checker\".")
 
         
 class SPLT_PT_Panel_4(bpy.types.Panel):
@@ -118,7 +127,7 @@ class SPLT_PT_Panel_5_1(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        row1 = layout.row();
+        row1 = layout.row()
         row1.prop(context.window_manager, "overwrite_files" , text="Overwrite files with number")
         row1.prop(context.window_manager, "number_overwrite", text="")
         layout.prop(context.window_manager, "delete_preview", text="Save preview image")

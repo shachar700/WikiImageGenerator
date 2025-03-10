@@ -31,7 +31,7 @@ bl_info = {
     "author": "Radiator Syrup",
     "description": "An addon to automate the rendering of game models into 2d images",
     "blender": (2, 80, 0),
-    "version": (2, 0, 1),
+    "version": (2, 1, 0),
     "location": "",
     "warning": "",
     "category": "Generic"
@@ -162,8 +162,8 @@ class SPLT_preferences(bpy.types.AddonPreferences):
             ('noGame', 'Without preferences', 'No game-specific preferences apply'),
             ('acnh', 'Animal Crossing: New Horizons', 'For Animal Crossing Enciclopedia'),
             ('acnl', '(experimental) Animal Crossing: New Leaf', 'For Animal Crossing Enciclopedia'),
-            ('splat2', 'Splatoon 2', 'For Inkipedia and Inkipedia ES'),
-            ('splat3', 'Splatoon 3', 'For Inkipedia and Inkipedia ES'),
+            ('splat2', 'Splatoon 2', 'For Inkipedia, Inkipedia ES and Inkipédia'),
+            ('splat3', 'Splatoon 3', 'For Inkipedia, Inkipedia ES and Inkipédia'),
         ],
         default='noGame',
         update=set_game_type
@@ -322,11 +322,11 @@ def register():
     
     bpy.types.WindowManager.game_type = bpy.props.EnumProperty(
     items=[
-        ('noGame', 'Choose a game', 'Choose a game'),
+        ('noGame', 'Without preferences', 'No game-specific preferences apply'),
         ('acnh', 'Animal Crossing: New Horizons', 'For Animal Crossing Enciclopedia'),
         ('acnl', '(experimental) Animal Crossing: New Leaf', 'For Animal Crossing Enciclopedia'),
-        ('splat2', 'Splatoon 2', 'For Inkipedia and Inkipedia ES'),
-        ('splat3', 'Splatoon 3', 'For Inkipedia and Inkipedia ES'),
+        ('splat2', 'Splatoon 2', 'For Inkipedia, Inkipedia ES and Inkipédia'),
+        ('splat3', 'Splatoon 3', 'For Inkipedia, Inkipedia ES and Inkipédia'),
     ],
     default=bpy.context.preferences.addons[__name__].preferences.game_type,
     update=set_game_type
@@ -351,6 +351,24 @@ def register():
     
     bpy.app.handlers.load_post.append(load_handler)
 
+    bpy.types.WindowManager.loop_rotation = bpy.props.BoolProperty(
+        name="Loop Rotation",
+        description="Continuously loop the rotation animation",
+        default=False
+    )
+    
+    bpy.types.WindowManager.rotation_speed = bpy.props.EnumProperty(
+        items=[
+            ('0.25', 'x0.25', 'Quarter speed'),
+            ('0.5', 'x0.5', 'Half speed'),
+            ('1', 'x1', 'Normal speed'),
+            ('2', 'x2', 'Double speed'),
+            ('5', 'x5', 'Five times speed'),
+        ],
+        name="Speed",
+        description="Set the speed of rotation",
+        default='1'
+    )
 def unregister():
     try:
         for cls in preference_classes:
@@ -368,4 +386,5 @@ def unregister():
     del bpy.types.WindowManager.x_resolution
     del bpy.types.WindowManager.y_resolution
     del bpy.types.WindowManager.dependencies_installed
+    del bpy.types.WindowManager.loop_rotation
     bpy.app.handlers.load_post.remove(load_handler)

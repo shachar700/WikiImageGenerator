@@ -3,7 +3,7 @@ import bpy
 import shutil
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty
+from bpy.props import FloatProperty, StringProperty, BoolProperty, IntProperty
 from math import radians, degrees, atan
 from mathutils import Vector
 import os
@@ -130,31 +130,32 @@ class PositionCamera(bpy.types.Operator):
 
 
 class CheckRotateModel(bpy.types.Operator):
-    """Operator which runs its self from a timer"""
     bl_idname = "object.check_rotation"
     bl_label = "Check Object Rotation"
 
-    limits: bpy.props.IntProperty(default=0)  # not 'limits ='
+    limits: IntProperty(default=0)
     _timer = None
     original_rotation = [0, 0, 0]
-
+    is_rotating = False
+    
     def modal(self, context, event):
         x_rot = context.window_manager.x_rotations
         y_rot = context.window_manager.y_rotations
         total_steps = x_rot * (2*y_rot + 2)
+
         if event.type in {'RIGHTMOUSE', 'ESC'} or self.limits > total_steps:
-            self.limits = 0
-            self.cancel(context)
+            self.finish_rotation(context)
             return {'FINISHED'}
 
         if event.type == 'TIMER':
+            speed = float(context.window_manager.rotation_speed)
+
             subject = context.window_manager.objectselection_props
             bpy.ops.object.select_all(action='DESELECT')
             subject.select_set(True)
             bpy.context.view_layer.objects.active = subject
 
             rotation_steps = context.window_manager.x_rotations
-
             rotation_angle = 360
 
             centre = bpy.context.scene.cursor.location
@@ -165,31 +166,59 @@ class CheckRotateModel(bpy.types.Operator):
                 bpy.ops.transform.rotate(
                     value=-1 * radians(rotation_angle/rotation_steps), center_override=centre, orient_type='GLOBAL')
 
-            bpy.ops.transform.rotate(value=radians(
-                y_rotation), orient_axis='Y', orient_type='LOCAL', center_override=centre)
+            bpy.ops.transform.rotate(value=radians(y_rotation), orient_axis='Y', orient_type='LOCAL', center_override=centre)
 
             self.limits += 1
+
+            if self.limits > total_steps:
+                if context.window_manager.loop_rotation:
+                    self.limits = 0
+                    subject.rotation_euler = self.original_rotation.copy()
+                else:
+                    self.finish_rotation(context)
+                    return {'FINISHED'}
         return {'PASS_THROUGH'}
 
     def execute(self, context):
-
         wm = context.window_manager
-        self._timer = wm.event_timer_add(time_step=0.1, window=context.window)
+        if self.is_rotating:
+            self.finish_rotation(context)
+            return {'FINISHED'}
+        
+        self.is_rotating = True
+        wm["is_rotating"] = True
+        
+        time_step = 0.1 / float(context.window_manager.rotation_speed)
+        self._timer = wm.event_timer_add(time_step, window=context.window)
         obj = context.window_manager.objectselection_props
         if self.limits == 0:
             self.original_rotation = obj.rotation_euler.copy()
-            self.original_location = obj.location.copy()
-        print(self.original_rotation)
         wm.modal_handler_add(self)
         return {'RUNNING_MODAL'}
 
-    def cancel(self, context):
+    def finish_rotation(self, context):
         obj = context.window_manager.objectselection_props
         wm = context.window_manager
-        print(self.original_rotation)
         obj.rotation_euler = self.original_rotation.copy()
-        obj.location = self.original_location.copy()
         wm.event_timer_remove(self._timer)
+        self.is_rotating = False
+        wm["is_rotating"] = False
+        self.limits = 0
+
+    @classmethod
+    def poll(cls, context):
+        return context.window_manager.objectselection_props is not None
+
+def update_speed(self, context):
+    wm = context.window_manager
+    if wm.get("is_rotating", False):
+        bpy.ops.object.check_rotation('INVOKE_DEFAULT')
+
+def update_loop(self, context):
+    wm = context.window_manager
+    if wm.get("is_rotating", False):
+        bpy.ops.object.check_rotation('INVOKE_DEFAULT')
+
 
 
 class FixFaces(bpy.types.Operator):
