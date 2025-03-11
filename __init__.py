@@ -1,6 +1,6 @@
 import bpy
-import subprocess
 import sys
+import subprocess
 from collections import namedtuple
 from bpy.props import (
     PointerProperty,
@@ -13,25 +13,12 @@ from . splt_panel import *
 from . splt_ops import *
 from bpy.app.handlers import persistent
 
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTIBILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-# General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <http://www.gnu.org/licenses/>.
-
 bl_info = {
     "name": "WikiImageGenerator",
     "author": "Radiator Syrup",
     "description": "An addon to automate the rendering of game models into 2d images",
     "blender": (2, 80, 0),
-    "version": (2, 1, 0),
+    "version": (2, 2, 0),
     "location": "",
     "warning": "",
     "category": "Generic"
@@ -39,85 +26,40 @@ bl_info = {
 
 Dependency = namedtuple("Dependency", ["module", "package", "name"])
 
-# Declare all modules that this add-on depends on. The package and (global) name can be set to None,
-# if they are equal to the module name. See import_module and ensure_and_import_module for the
-# explanation of the arguments.
 dependencies = (Dependency(module="PIL", package="Pillow", name=None),
                 Dependency(module="numpy", package=None, name=None))
 
 
-def install_pip():
-    """
-    Installs pip if not already present. Please note that ensurepip.bootstrap() also calls pip, which adds the
-    environment variable PIP_REQ_TRACKER. After ensurepip.bootstrap() finishes execution, the directory doesn't exist
-    anymore. However, when subprocess is used to call pip, in order to install a package, the environment variables
-    still contain PIP_REQ_TRACKER with the now nonexistent path. This is a problem since pip checks if PIP_REQ_TRACKER
-    is set and if it is, attempts to use it as temp directory. This would result in an error because the
-    directory can't be found. Therefore, PIP_REQ_TRACKER needs to be removed from environment variables.
-    :return:
-    """
+def add_blender_python_paths():
+    import os
+    import bpy
 
-    try:
-        # Check if pip is already installed
-        subprocess.run([sys.executable, "-m",
-                       "pip", "--version"], check=True)
-    except subprocess.CalledProcessError:
-        import os
-        import ensurepip
+    blender_python_path = os.path.join(bpy.utils.script_path(), "modules")
+    if blender_python_path not in sys.path:
+        sys.path.append(blender_python_path)
 
-        ensurepip.bootstrap()
-        os.environ.pop("PIP_REQ_TRACKER", None)
+    python_lib_path = os.path.join(bpy.app.binary_path_python, "lib")
+    if python_lib_path not in sys.path:
+        sys.path.append(python_lib_path)
 
 
 def import_module(module_name, global_name=None):
-    """
-    Import a module.
-    :param module_name: Module to import.
-    :param global_name: (Optional) Name under which the module is imported. If None the module_name will be used.
-       This allows to import under a different name with the same effect as e.g. "import numpy as np" where "np" is
-       the global_name under which the module can be accessed.
-    :raises: ImportError and ModuleNotFoundError
-    """
     import importlib
 
     if global_name is None:
         global_name = module_name
 
-    # Attempt to import the module and assign it to globals dictionary. This allow to access the module under
-    # the given name, just like the regular import would.
-    globals()[global_name] = importlib.import_module(module_name)
+    try:
+        globals()[global_name] = importlib.import_module(module_name)
+    except ImportError as e:
+        print(f"Error importing {module_name}: {e}")
 
-
-def install_and_import_module(module_name, package_name=None, global_name=None):
-    """
-    Installs the package through pip and attempts to import the installed module.
-    :param module_name: Module to import.
-    :param package_name: (Optional) Name of the package that needs to be installed. If None it is assumed to be equal
-       to the module_name.
-    :param global_name: (Optional) Name under which the module is imported. If None the module_name will be used.
-       This allows to import under a different name with the same effect as e.g. "import numpy as np" where "np" is
-       the global_name under which the module can be accessed.
-    :raises: subprocess.CalledProcessError and ImportError
-    """
-    import importlib
-
-    if package_name is None:
-        package_name = module_name
-
-    if global_name is None:
-        global_name = module_name
-
-    # Try to install the package. This may fail with subprocess.CalledProcessError
-    subprocess.run([sys.executable, "-m", "pip",
-                   "install", package_name], check=True)
-
-    # The installation succeeded, attempt to import the module again
-    import_module(module_name, global_name)
 
 def set_game_type(self, context):
     if not self:
         self = context.window_manager
     context.scene.render.game_type = self.game_type
+
 
 class SPLT_OT_install_dependencies(bpy.types.Operator):
     bl_idname = "wiki.install_dependencies"
@@ -129,27 +71,20 @@ class SPLT_OT_install_dependencies(bpy.types.Operator):
 
     @classmethod
     def poll(self, context):
-        # Deactivate when dependencies have been installed
         return not context.window_manager.dependencies_installed
 
     def execute(self, context):
         print(sys.executable)
         try:
-            install_pip()
+            add_blender_python_paths()
             for dependency in dependencies:
-                install_and_import_module(module_name=dependency.module,
-                                          package_name=dependency.package,
-                                          global_name=dependency.name)
-        except (subprocess.CalledProcessError, ImportError) as err:
-            self.report({"ERROR"}, str(err))
+                import_module(module_name=dependency.module,
+                              global_name=dependency.name)
+        except ImportError as err:
+            self.report({"ERROR"}, f"Error importing: {err}")
             return {"CANCELLED"}
 
         context.window_manager.dependencies_installed = True
-
-        # Register the panels, operators, etc. since dependencies are installed
-        for cls in classes:
-            bpy.utils.register_class(cls)
-
         return {"FINISHED"}
 
 
@@ -222,8 +157,6 @@ def set_y_resolution(self, context):
 
 @persistent
 def load_handler(dummy):
-    # set_x_resolution(None, bpy.context)
-    # set_y_resolution(None, bpy.context)
     pass
 
 
@@ -241,22 +174,20 @@ def register():
         dependencies_installed = True
     except ModuleNotFoundError as e:
         print(e)
-        # Don't register other panels, operators etc.
         pass
 
-    if(dependencies_installed):
+    if dependencies_installed:
         for cls in classes:
             bpy.utils.register_class(cls)
 
     bpy.app.handlers.load_post.append(load_handler)
-    
-    # bpy.utils.register_class(SPLT_PT_Panel)
+
 
     mode_options = [
-        ("JPEG", "JPEG", '', 'JPEG', 0),
-        ("PNG", "PNG", '', 'PNG', 1),
+            ("JPEG", "JPEG", '', 'JPEG', 0),
+            ("PNG", "PNG", '', 'PNG', 1),
 
-    ]
+        ]
 
     bpy.types.WindowManager.output_format = bpy.props.EnumProperty(
         items=mode_options,
@@ -369,6 +300,8 @@ def register():
         description="Set the speed of rotation",
         default='1'
     )
+
+
 def unregister():
     try:
         for cls in preference_classes:

@@ -1,17 +1,48 @@
+import sys
 from datetime import datetime
 from os import path, remove
-import os
 import re
+import os
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+lib_path = os.path.join(current_dir, 'libs')
+pil_path = os.path.join(lib_path, 'PIL')
+
+if lib_path not in sys.path:
+    sys.path.insert(0, lib_path)
+
 try:
-    from PIL.Image import ANTIALIAS, fromarray, new
-    from PIL import ImageFile, Image
-except ModuleNotFoundError:
-    print("Could not find PIL")
+    import PIL.Image
+    import PIL.ImageFile
+    Image = PIL.Image
+    ImageFile = PIL.ImageFile
+    Resampling = PIL.Image.Resampling
+    fromarray = PIL.Image.fromarray
+    new = PIL.Image.new
+except Exception as e:
+    try:
+        sys.path.insert(0, pil_path)
+        import Image
+        import ImageFile
+        try:
+            Resampling = Image.Resampling
+        except AttributeError:
+            Resampling = Image.Resampling
+        fromarray = Image.fromarray
+        new = Image.new
+    except Exception as inner_e:
+        error_msg = f"Error importing PIL: {str(e)} -- Secondary error: {str(inner_e)}"
+        try:
+            import bpy
+            bpy.ops.wm.report({'ERROR'}, error_msg)
+        except:
+            pass
+        raise ImportError(error_msg)
+
 from numpy import array, uint8
 
-
 class ImageProcessor(object):
-    def __init__(self, y_rotations, x_rotations, final_counter, context):
+    def __init__(self, y_rotations, x_rotations, final_counter=0, context=None):
         self.target_dimension = 280
         self.target_size = 512 * 1024  # 512 KB
         self.cropping = {'left': [], 'top': [], 'right': [], 'bottom': []}
@@ -71,7 +102,7 @@ class ImageProcessor(object):
             image = image.resize((
                 int(image.width * target_ratio),
                 int(image.height * target_ratio),
-            ), ANTIALIAS)
+            ), resample=Image.LANCZOS)
             left_crop = int(
                 target_ratio * (self.cropping['left'][i] - min_cropping[0]))
             top_crop = int(
@@ -98,10 +129,12 @@ class ImageProcessor(object):
         full_image.save(output_file, format=file_format)
 
         lang_category = "3D model images"
-        if self.context.window_manager.wiki_language == 'es':
-            lang_category = "Imágenes de modelos 3D"
-        if self.context.window_manager.wiki_language == 'fr':
-            lang_category = "Images de modèles 3D"
+        if self.context and hasattr(self.context, "window_manager"):
+            if hasattr(self.context.window_manager, "wiki_language"):
+                if self.context.window_manager.wiki_language == 'es':
+                    lang_category = "Imágenes de modelos 3D"
+                if self.context.window_manager.wiki_language == 'fr':
+                    lang_category = "Images de modèles 3D"
         
         description = f'''{{{{#switch: {{{{{{1|}}}}}}
   | url = <nowiki>%s?%s</nowiki>
@@ -123,7 +156,6 @@ class ImageProcessor(object):
 
 
 if __name__ == "__main__":
-
     directory = os.path.join(os.path.dirname(__file__), 'Booth')
     files = os.listdir(directory)
     files.sort(key=lambda f: int(re.sub('\D', '', f)))
@@ -134,8 +166,8 @@ if __name__ == "__main__":
     X_ROTATIONS = 3
     print(Y_ROTATIONS, X_ROTATIONS)
 
-    p = ImageProcessor(Y_ROTATIONS, 1)
+    p = ImageProcessor(Y_ROTATIONS, 1, 0)
     for i, filename in enumerate(files):
         print(filename)
         p.blend(os.path.join(directory, filename))
-    p.stitch_and_upload()
+    p.stitch_and_upload(directory)
